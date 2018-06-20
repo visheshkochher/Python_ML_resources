@@ -294,7 +294,7 @@ from sklearn.datasets import load_iris
 from sklearn.cluster import KMeans
 import plotly
 import plotly.graph_objs as go
-
+import pandas as pd
 iris = load_iris()
 df = pd.DataFrame(data=iris.data, columns=iris.feature_names)
 df_target = iris.target
@@ -372,8 +372,8 @@ plt.show()
 
 from scipy.cluster.hierarchy import fcluster
 
-labels = fcluster(mergings, 3.5, criterion='distance')
-
+labels = fcluster(mergings, t=3, criterion='distance')
+help(fcluster)
 pd.crosstab(labels, iris.target)
 
 ###################################
@@ -384,13 +384,14 @@ pd.crosstab(labels, iris.target)
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import Imputer
+import pandas as pd
 
-iris = datasets.load_iris()
+iris = load_iris()
 df = pd.DataFrame(data=iris.data, columns=iris.feature_names)
 imp = Imputer()
 df = imp.fit_transform(df)
 model = TSNE(learning_rate=100)
-transformed = model.fit_transform(df)
+transformed = model.fit_transform(iris.data)
 
 #####################################################
 ###########            PCA        ###################
@@ -400,11 +401,12 @@ from sklearn.feature_selection import SelectKBest
 import plotly.graph_objs as go
 import plotly
 
-pca = PCA(n_components=2)
+pca = PCA(n_components=3)
 
-pca.fit(iris.data)
-trans_data = pca.transform(iris.data)
+pca.fit(iris.data[:,:])
+trans_data = pca.transform(iris.data[:,:])
 pca.components_
+pca.explained_variance_
 plotly.offline.plot([
     go.Scatter(x=iris.data[:, 0],
                y=iris.data[:, 2],
@@ -414,7 +416,8 @@ plotly.offline.plot([
                            color=iris.target,
                            showscale=True,
                            opacity=0.5,
-                           colorscale='Jet'
+                           colorscale='Jet',
+                           symbol = '112'
                            )
                ),
     go.Scatter(x=trans_data[:, 0],
@@ -424,7 +427,7 @@ plotly.offline.plot([
                            color=iris.target,
                            showscale=True,
                            opacity=0.5,
-                           colorscale='Jet',
+                           colorscale='RdBu',
                            symbol = '121'
                            ))
 ])
@@ -439,13 +442,29 @@ mean = pca.mean_
 first_pc = pca.components_[0,:]
 
 
+####BUILD RECOMMENDATION FOR ITEMS SIMILAR TO ROW -1
+
+from sklearn.preprocessing import normalize
+normalized_features = normalize(trans_data)
+normalized_features[:]@pca.components_
+similarities = trans_data.dot(trans_data[-1])
+similarities_normal = normalized_features.dot(normalized_features[1])
+similarities.nlargest()
+plotly.offline.plot([go.Scatter(x=iris.target, y = similarities, mode='markers')])
+plotly.offline.plot([go.Scatter(x=iris.target, y = similarities_normal, mode='markers')])
+
+
+
+
+
+
 
 #####################################################
 ###########            NMF        ###################
 #####################################################
 from sklearn.decomposition import NMF
-
-model = NMF(n_components=2)
+import numpy as np
+model = NMF(n_components=3)
 model.fit(iris.data)
 features = model.transform(iris.data)
 
@@ -475,8 +494,10 @@ plotly.offline.plot([
 
 ###See intrinsic dimensions and reconstruct original dataset
 components = model.components_
-np.matmul(features[0], components) #OR features[0].dot(components)
+features[0]@components #OR np.matmul(features[0], components) #OR features[0].dot(components)
+features[:]@components #OR np.matmul(features[0], components) #OR features[0].dot(components)
 iris.data[0,:]
+iris.target[0]
 
 
 ###CALCULATING COSINE SIMILARITIES TO BUILD RECOMMENDATION ENGINES
@@ -484,9 +505,10 @@ from sklearn.preprocessing import normalize
 
 normalized_features = normalize(features)
 df = pd.DataFrame(normalized_features, index=iris.target)
-current_row = df.iloc[-1]
+current_row = np.array(df.iloc[1])
 similarities = df.dot(current_row) ###COSINE SIMILARITIES
 similarities.nlargest()
+plotly.offline.plot([go.Scatter(x=iris.target, y = similarities, mode='markers')])
 most_relevant = [True if i > .9 else False for i in similarities]
 recommendation = df.loc[most_relevant].index
 
@@ -508,7 +530,7 @@ import networkx as nx
 G=nx.Graph()
 G.add_nodes_from([1,2,3,5])
 
-G.add_edges_from([(2,3),(2,1), (2,5)])
+G.add_edges_from([(2,3),(2,1), (2,5), (1,5)])
 
 
 G.node[1]['date']='2018-06-10'
@@ -533,11 +555,13 @@ for n, d in G.nodes(data=True):
     # Calculate the degree of each node: G.node[n]['degree']
     G.node[n]['degree'] = nx.degree(G)[n]
 
+
+import nxviz as nv
+import matplotlib.pyplot as plt
+
 # Create the ArcPlot object: a
 a = nv.ArcPlot(G, node_order='degree', node_labels=True)
 a.draw()
-import nxviz as nv
-import matplotlib.pyplot as plt
 ap = nv.ArcPlot(G, node_order='date', node_color='date', node_labels=True, node_size='date')
 ap.draw()
 
@@ -546,8 +570,10 @@ h.draw()
 
 c = nv.CircosPlot(G, node_order='degree', node_grouping = 'date', node_color='date')
 c.draw()
+
+
 ###IDENTIFYING IMPORTANT NODES
-G.neighbors(1)
+list(G.neighbors(1))
 nx.degree_centrality(G)
 nx.betweenness_centrality(G)
 
@@ -622,12 +648,12 @@ def node_in_open_triangle(G, n):
 
 
 list(nx.find_cliques(G))
-
+node_in_open_triangle(G,1)
 
 
 ####### SUB GRAPH  for node 8 neighbors#######
 sim_G = nx.erdos_renyi_graph(n=20, p=.2)
-nodes = sim_G.neighbors(8)
+nodes = list(sim_G.neighbors(8))
 nodes.append(8)
 
 G_eight = sim_G.subgraph(nodes)
@@ -638,7 +664,9 @@ sim_G.add_node(20)
 connected_subgraph = list(nx.connected_component_subgraphs(sim_G))
 [i.nodes() for i in connected_subgraph]
 nx.draw(sim_G)
-G.nodes(data=True)
+sim_G.nodes(data=True)
+sim_G.edges(data=True)
+[n.nodes() for n in connected_subgraph]
 
 
 
@@ -698,16 +726,23 @@ df_text['text'] = df_text['label'].apply(lambda x: 'hi my name is {}'.format(lab
 trainX, testX, trainY, testY = train_test_split(df_text, pd.get_dummies(df_text.label), test_size=.3)
 
 TOKEN = '\\S+(?=\\s+)'
-countvec = CountVectorizer(token_pattern=TOKEN, ngram_range = (1,3))
+countvec = CountVectorizer(ngram_range = (1,3))
 countvec_HASH = HashingVectorizer(token_pattern=TOKEN, ngram_range = (1,3), norm=None, non_negative=True)
 
 pipeline = Pipeline(
     [
         ('countvec', countvec),
-        ('logr', logr)
+        ('logr', LogisticRegression())
      ]
 )
 
+x = np.array(countvec.fit_transform(df_text['text']).todense())
+model = countvec.fit(df_text['text'])
+model.get_feature_names()
+countvec.fit_transform(df_text['text']).mean(axis=0)
+x = countvec.fit_transform(df_text['text']).todok()
+countvec.fit_transform(df_text['text']).toarray()
+y=countvec.fit_transform(df_text['text']).indices
 
 pipeline.fit(df_text['text'], df_text['label'])
 pipeline.score(df_text['text'], df_text['label'])
@@ -731,9 +766,10 @@ text_pipeline = Pipeline([('text_only', get_text_data),
 just_numeric_data = numeric_pipeline.fit_transform(trainX)
 just_text_data = text_pipeline.fit_transform(trainX)
 
+help(just_text_data)
 union = FeatureUnion([('numeric_pipeline', numeric_pipeline),
                       ('text_pipeline', text_pipeline)])
-
+union_data = pd.DataFrame(union.fit_transform(trainX).todense())
 # lasso = OneVsRestClassifier(Lasso(alpha=0.01, normalize=True))
 # lasso.fit(trainX.drop(['text', 'label'], axis = 1), trainY)
 # lasso_coef = lasso.coef_
@@ -750,13 +786,13 @@ pl = Pipeline([
 # param_grid = {'union__text_pipeline__cvec__ngram_range':[(1,1), (1,2)]}
 param_grid = {'union__text_pipeline__cvec__ngram_range':[(1,1), (1,2)],
               'logreg__estimator__C':[.1, 1, 10]}
-cv = GridSearchCV(pl, param_grid=param_grid)
+cv = GridSearchCV(pl, param_grid=param_grid, cv=5)
 cv.fit(trainX, trainY)
 # pl.fit(trainX, trainY)
 cv.predict_proba(testX)
 cv.best_params_
-list(zip(pl.predict(testX), testY))
-pl.score(testX, testY)
+list(zip(cv.predict(testX), testY))
+cv.score(testX, testY)
 
 
 ########INTERACTION############
