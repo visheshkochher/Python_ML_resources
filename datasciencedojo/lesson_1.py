@@ -30,6 +30,21 @@ def plot_box(df, split, metric='count'):
     plotly.offline.plot(data)
 
 
+def plot_hist(df, x_series, group_series, barmode='stack'):
+    groups = df[group_series].unique()
+    traces = []
+    for group in groups:
+        temp_df = df[df[group_series] == group]
+        trace = go.Histogram(x=temp_df[x_series],
+                       name=group
+                       )
+        traces.append(trace)
+    data = traces
+    layout = go.Layout(barmode=barmode)
+    fig = go.Figure(data=data, layout=layout)
+    plotly.offline.plot(fig)
+
+
 def plot_scatter(df, x_series, y_series, color_col):
     groups = df[color_col].unique()
     traces = []
