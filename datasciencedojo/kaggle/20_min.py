@@ -81,4 +81,8 @@ bias_variance_test(testX, testY)
 cv_model.best_params_
 cv_model.best_score_
 cv_model.best_estimator_
-cv_model.cv_results_
+standard_deviation = cv_model.cv_results_['std_test_score'].mean()
+
+
+import random
+random.random.§
