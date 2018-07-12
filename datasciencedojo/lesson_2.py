@@ -8,7 +8,8 @@ from datasciencedojo.lesson_1 import *
 from datetime import datetime
 from pytz import timezone
 from sklearn.linear_model import LogisticRegression
-from sklearn.datasets import load_boston
+from difflib import SequenceMatcher
+
 def curr_time():
     return str(datetime.now(timezone('CET')).strftime("%Y-%m-%d %H:%M:%S"))
 
@@ -110,16 +111,19 @@ def clean_and_engineer_df(df):
     features_numeric = pd.DataFrame(imp.fit_transform(features.drop(categorical_cols, axis=1)),
                                     columns=features.drop(categorical_cols, axis=1).columns)
     features_all = features_numeric
-    features_all = features_all.join(pd.get_dummies(features[categorical_cols]))
     features_raw = features_all.join(features[categorical_cols])
-    return features_all, TARGET, features_raw
+    features_dummies = features_all.join(pd.get_dummies(features[categorical_cols]))
+    features_raw = features_all.join(features[categorical_cols])
+    return features_dummies, TARGET, features_raw
 
 
 titanic_df = pd.read_csv('/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/bootcamp/Datasets/titanic.csv')
 kaggle_data = pd.read_csv('/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/kaggle/everyone_dies/test.csv')
 all_data = titanic_df.drop(['Survived'], axis=1).append(kaggle_data, ignore_index=False)
-features_all, target, features_raw = clean_and_engineer_df(titanic_df)
-kaggle_data_test, _, kaggle_data_raw = clean_and_engineer_df(kaggle_data)
+
+
+
+all_data_test, _, all_data_raw = clean_and_engineer_df(all_data)
 
 
 def gather_ticket_details(x):
@@ -128,12 +132,61 @@ def gather_ticket_details(x):
                           Parch_min=x['Parch'].min(),
                           SibSp_max=x['Parch'].max(),
                           SibSp_min=x['Parch'].min(),
-                          names="{%s}" % ', '.join(x['Name'])))
+                          names="[[%s]]" % '], ['.join(x['Name']),
+                          surnames='[["%s"]]' % '"], ["'.join(x["Name"].apply(lambda x: x.split(',')[0]).astype(str)),
+                          passenger_id_concat="[%s]" % ', '.join(x['PassengerId'].astype(str)),
+                          min_fare=x['Fare'].min(),
+                          max_fare=x['Fare'].max(),
+                          min_class=x['Pclass'].min(),
+                          max_class=x['Pclass'].max(),
+                          total_special_title=x['Special_Title'].astype(int).sum()
+                          )
+                     )
 
-ticket_details = all_data.groupby('Ticket').apply(gather_ticket_details).sort_values('passenger_count')
+ticket_data = all_data#all_data_raw.join(kaggle_data[['Name', 'Ticket', 'Cabin', 'PassengerId']])
+ticket_details = ticket_data.groupby('Ticket').apply(gather_ticket_details).sort_values('passenger_count')
+ticket_details1 = ticket_data.groupby('Ticket').apply(gather_ticket_details).reset_index().sort_values('Ticket')
+group_surnames = ticket_details1['surnames'].apply(lambda x: eval(x)[0][0])
+ticket_details1['group_surnames'] = group_surnames
+def gather_surname_groups(x):
+    return pd.Series(dict(passenger_count=x['passenger_count'].sum(),
+                          Parch_max=x['Parch_max'].max(),
+                          Parch_min=x['Parch_min'].min(),
+                          SibSp_max=x['SibSp_max'].max(),
+                          SibSp_min=x['SibSp_min'].min(),
+                          passenger_id_concat="[%s]" % ', '.join(x['passenger_id_concat'].astype(str)),
+                          ticket_concat='[["%s"]]' % '"], ["'.join(x['Ticket']),
+                          min_class=x['min_class'].min(),
+                          max_class=x['max_class'].max(),
+                          total_special_title=x['total_special_title'].sum(),
+                          #names="[[%s]]" % '], ['.join(x['Name']),
+                          #surnames="[{%s}]" % ', '.join(x['Name'].apply(lambda x: x.split(',')[0]).astype(str))
+                          )
+                     )
+
+consecutive_groups= ticket_details1.groupby('group_surnames').apply(gather_surname_groups).reset_index().sort_values('passenger_count')
+
+def new_relationships(df):
+    row_name = df
+    row_name['group_size'] = 0
+    row_name['Ticket_nr'] = [(y[-1]) for y in eval(row_name['ticket_concat'])]
+    row_name['Ticket_nr'] = [int((y.split(' ')[-1]).replace('[[', '{').replace(']]', '}').replace('[', '').replace(']', '').replace('{', '[').replace('}', ']')) for y in row_name['Ticket_nr'] if y !='LINE']
+    row_name['ticket_range'] = max(row_name['Ticket_nr']) - min(row_name['Ticket_nr']) if row_name['Ticket_nr'] else 0
+
+    if (row_name['min_class']-row_name['max_class'] == 0 and row_name['ticket_range'] <=100) or (row_name['min_class']-row_name['max_class'] == 0 and row_name['Parch_max']+row_name('SibSp_max') < row_name['passenger_count']) or (row_name['ticket_range'] <=100 and row_name['Parch_max']+row_name('SibSp_max') < row_name['passenger_count']) or (row_name['min_class']-row_name['max_class'] == 0 and row_name['max_class'] < 3):
+        row_name['group_size'] = row_name['passenger_count']
+
+consecutive_groups.apply(new_relationships, axis = 1)
+
+
+SequenceMatcher(None, 134, 124).ratio()
 
 all_data.groupby('Ticket').agg({'PassengerId': 'count'})
 plot_hist(all_data, 'Ticket', 'Pclass')
+
+
+features_all, target, features_raw = clean_and_engineer_df(titanic_df)
+kaggle_data_test, _, kaggle_data_raw = clean_and_engineer_df(kaggle_data)
 # plot_hist(titanic_df, 'count_cabins', 'Survived')
 # plot_hist(features_raw, 'Age', 'Clean_Title')
 # plot_hist(df, 'ticket_alpha', 'count_cabins')
