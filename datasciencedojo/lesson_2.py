@@ -1,14 +1,14 @@
 from sklearn import tree
 from sklearn.ensemble.forest import RandomForestClassifier
 import scikitplot as skplt
-from sklearn.preprocessing import Imputer
+from sklearn.preprocessing import Imputer, normalize
 import pydot
 from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
 from datasciencedojo.lesson_1 import *
 from datetime import datetime
 from pytz import timezone
-
-
+from sklearn.linear_model import LogisticRegression
+from sklearn.datasets import load_boston
 def curr_time():
     return str(datetime.now(timezone('CET')).strftime("%Y-%m-%d %H:%M:%S"))
 
@@ -117,10 +117,23 @@ def clean_and_engineer_df(df):
 
 titanic_df = pd.read_csv('/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/bootcamp/Datasets/titanic.csv')
 kaggle_data = pd.read_csv('/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/kaggle/everyone_dies/test.csv')
+all_data = titanic_df.drop(['Survived'], axis=1).append(kaggle_data, ignore_index=False)
 features_all, target, features_raw = clean_and_engineer_df(titanic_df)
 kaggle_data_test, _, kaggle_data_raw = clean_and_engineer_df(kaggle_data)
 
-# plot_hist(titanic_df, 'ticket_alpha', 'Survived')
+
+def gather_ticket_details(x):
+    return pd.Series(dict(passenger_count=x['PassengerId'].count(),
+                          Parch_max=x['Parch'].max(),
+                          Parch_min=x['Parch'].min(),
+                          SibSp_max=x['Parch'].max(),
+                          SibSp_min=x['Parch'].min(),
+                          names="{%s}" % ', '.join(x['Name'])))
+
+ticket_details = all_data.groupby('Ticket').apply(gather_ticket_details).sort_values('passenger_count')
+
+all_data.groupby('Ticket').agg({'PassengerId': 'count'})
+plot_hist(all_data, 'Ticket', 'Pclass')
 # plot_hist(titanic_df, 'count_cabins', 'Survived')
 # plot_hist(features_raw, 'Age', 'Clean_Title')
 # plot_hist(df, 'ticket_alpha', 'count_cabins')
@@ -128,6 +141,7 @@ kaggle_data_test, _, kaggle_data_raw = clean_and_engineer_df(kaggle_data)
 # plot_hist(df, 'ticket_alpha', 'Pclass')
 # plot_hist(df, 'ticket_alpha', 'Parch')
 # plot_hist(df, 'ticket_alpha', 'SibSp')
+# plot_density(df, 'group_size', 'Survived')
 # plot_density(df, 'group_size', 'Survived')
 # plot_density(df, 'is_alone', 'Survived')
 # plot_hist(df, 'has_special_cabin', 'Survived')
@@ -162,18 +176,34 @@ cv_model = RandomizedSearchCV(clf, param_distributions=param_grid, cv=5, n_jobs=
 cv_model.fit(trainX, trainY.values.ravel())
 cv_model.score(trainX, trainY)
 cv_model.score(testX, testY)
+cv_model.best_params_
 
-###CHECK THRESHOLD PPredictERFORMANCE
+
+logit = LogisticRegression(penalty='l1')
+logit.fit((trainX), trainY.values.ravel())
+logit.score((trainX), trainY)
+logit.score((testX), testY)
+logit.coef_
+feature_importance = pd.DataFrame(logit.coef_[0], index = trainX.columns, columns=['Imp']).reset_index()
+feature_importance['pk'] = 1
+# plot_scatter(feature_importance, 'index', 'Imp', 'index')
+plot_bar(feature_importance, 'index', 'Imp', 'index')
+
+
+###CHECK THRESHOLD PERFORMANCE
 predict_proba_df = pd.DataFrame(list(zip([1-x[0] for x in cv_model.predict_proba(testX)], testY['Survived'])), columns = ['Predict', 'Actual'])
 plot_density(predict_proba_df, 'Predict', 'Actual')
 predict_proba_df['Result'] = predict_proba_df['Predict'].apply(lambda x: 1 if x >= .5 else 0)
 pd.crosstab(predict_proba_df['Result'], predict_proba_df['Actual'])
-def bias_variance_test(testX, testY):
+
+
+### CHECK BIAS AND VARIANCE
+def bias_variance_test(testX, testY, n = 500):
     test_all = testX.join(testY)
     plt.close()
     i=0
     result = []
-    while i<500:
+    while i<n:
         sample_data = test_all.sample(round(len(test_all.index)*.2))
         score = cv_model.score(sample_data.drop('Survived', axis=1), sample_data['Survived'])
         result.append(score)
@@ -184,11 +214,11 @@ def bias_variance_test(testX, testY):
 
 
 bias_variance_test(testX, testY)
-cv_model.best_params_
+
 
 #### MAKE SUBMISSION
 cv_model.fit(features_all, target.values.ravel())
-cv_model.best_score_
+# cv_model.best_score_
 kaggle_predictions = cv_model.predict(kaggle_data_test)
 
 submission = kaggle_data[['PassengerId']]
@@ -202,24 +232,32 @@ sub3 = pd.read_csv('/Users/visheshkochher/Desktop/Python_ML_resources/datascienc
 
 sub_all = sub3.join(sub1, lsuffix='_1', rsuffix='_2')
 pd.crosstab(sub_all['Survived_1'], sub_all['Survived_2'])
-# cv_model.cv_results_
+cv_model.cv_results_
 
 
-### VISUALIZE TREE
+### ASSESS BEST PARAMS TREE AND SCORE
 tree_model = RandomForestClassifier(random_state=297, **cv_model.best_params_) ####ONLY IF THE PREVIOUS MODEL IS A SearchCV
 tree_model = tree_model.fit(trainX, trainY.values.ravel())
-tree.export_graphviz(tree_model,
-                     feature_names=list(trainX.columns),
-                     out_file='/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/tree.dot')
-(graph,) = pydot.graph_from_dot_file('/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/tree.dot')
-graph.write_png('/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/tree.png')
-
-### PREDICT AND SCORE
-prediction = tree_model.predict(features_all)
-tree_model.predict_proba(features_all)
 tree_model.score(trainX, trainY)
 tree_model.score(testX, testY)
-tree_model.feature_importances_
+
+### CHECK IMPORTANCE OF FEATURES
+feature_importance = pd.DataFrame(tree_model.feature_importances_, index = trainX.columns, columns=['Imp']).reset_index()
+feature_importance['pk'] = 1
+plot_scatter(feature_importance, 'index', 'Imp', 'index')
+plot_bar(feature_importance, 'index', 'Imp', 'index')
+
+### PREDICT
+prediction = tree_model.predict(features_all)
+tree_model.predict_proba(features_all)
+
+#### VISUALIZE TREE
+### ONLY FOR SIMPLE DECISION TREE
+# tree.export_graphviz(tree_model,
+#                      feature_names=list(trainX.columns),
+#                      out_file='/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/tree.dot')
+# (graph,) = pydot.graph_from_dot_file('/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/tree.dot')
+# graph.write_png('/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/tree.png')
 
 skplt.metrics.plot_confusion_matrix(target, prediction, normalize=True)
 pd.crosstab(target['Survived'], prediction)

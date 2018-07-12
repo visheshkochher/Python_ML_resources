@@ -45,6 +45,22 @@ def plot_hist(df, x_series, group_series, barmode='stack'):
     plotly.offline.plot(fig)
 
 
+def plot_bar(df, x_series, y_series, group_series, barmode='stack'):
+    groups = df[group_series].unique()
+    traces = []
+    for group in groups:
+        temp_df = df[df[group_series] == group]
+        trace = go.Bar(x=temp_df[x_series],
+                       y=temp_df[y_series],
+                       name=group
+                       )
+        traces.append(trace)
+    data = traces
+    layout = go.Layout(barmode=barmode)
+    fig = go.Figure(data=data, layout=layout)
+    plotly.offline.plot(fig)
+
+
 def plot_scatter(df, x_series, y_series, color_col):
     groups = df[color_col].unique()
     traces = []
