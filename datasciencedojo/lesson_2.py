@@ -1,14 +1,11 @@
-from sklearn import tree
 from sklearn.ensemble.forest import RandomForestClassifier
 import scikitplot as skplt
 from sklearn.preprocessing import Imputer, normalize
-import pydot
 from sklearn.model_selection import train_test_split, GridSearchCV, RandomizedSearchCV
 from datasciencedojo.lesson_1 import *
 from datetime import datetime
 from pytz import timezone
 from sklearn.linear_model import LogisticRegression
-from difflib import SequenceMatcher
 
 
 def curr_time():
@@ -16,15 +13,12 @@ def curr_time():
 
 
 def clean_and_engineer_df(df):
-    # df = df.copy()
-    # df = kaggle_data
-    # df = titanic_df
+
     TARGET = None
     if 'Survived' in df.columns:
         df['Survived'] = df['Survived'].astype('category')
         TARGET = df[['Survived']]
 
-    # df['Pclass'] = df['Pclass'].astype('category')
     df['Embarked'] = df['Embarked'].astype('category')
     df['Sex'] = df['Sex'].astype('category')
 
@@ -33,8 +27,6 @@ def clean_and_engineer_df(df):
 
     ####NEW FEATURES
     df['Title'] = df.Name.str.extract(r',\s*([^\.]*)\s*\.', expand=False)
-    # df['group_size'] = df.apply(lambda x: x['Parch'] + x['SibSp'], axis=1)
-    # df['is_alone'] = df.apply(lambda x: 0 if x['group_size'] == 1 else 1, axis=1)
     ### REDUCE TITLE CATEGORIES
     ## map 'Dr' based on gender
     mapping = {'Ms': 'Miss',
@@ -116,7 +108,6 @@ def clean_and_engineer_df(df):
     features_numeric = pd.DataFrame(imp.fit_transform(features.drop(categorical_cols, axis=1)),
                                     columns=features.drop(categorical_cols, axis=1).columns)
     features_all = features_numeric
-    features_raw = features_all.join(features[categorical_cols])
     features_dummies = features_all.join(pd.get_dummies(features[categorical_cols]))
     features_raw = features_all.join(features[categorical_cols])
     return features_dummies, TARGET, features_raw
@@ -149,7 +140,7 @@ def gather_ticket_details(x):
                      )
 
 
-ticket_data = all_data  # all_data_raw.join(kaggle_data[['Name', 'Ticket', 'Cabin', 'PassengerId']])
+ticket_data = all_data
 ticket_details = ticket_data.groupby('Ticket').apply(gather_ticket_details).sort_values('passenger_count')
 ticket_details1 = ticket_data.groupby('Ticket').apply(gather_ticket_details).reset_index().sort_values('Ticket')
 group_surnames = ticket_details1['surnames'].apply(lambda x: eval(x)[0][0])
@@ -180,14 +171,12 @@ consecutive_groups = ticket_details1.groupby('group_surnames').apply(gather_surn
 def new_relationships(df):
     row_name = df
     row_name['group_size'] = 0
-    # row_name['fam_total'] = row_name['Parch_max']+row_name('SibSp_max')
     row_name['Ticket_nr'] = [(y[-1]) for y in eval(row_name['ticket_concat'])]
     row_name['Ticket_nr'] = [int(
         (y.split(' ')[-1]).replace('[[', '{').replace(']]', '}').replace('[', '').replace(']', '').replace('{',
                                                                                                            '[').replace(
             '}', ']')) for y in row_name['Ticket_nr'] if y != 'LINE']
     row_name['Ticket_raw'] = [(y[0]) for y in eval(row_name['ticket_concat'])]
-    # row_name['Ticket_raw'] = [int(y.replace('[[', '{').replace(']]', '}').replace('[', '').replace(']', '').replace('{', '[').replace('}', ']')) for y in row_name['ticket_concat']]
     row_name['ticket_range'] = max(row_name['Ticket_nr']) - min(row_name['Ticket_nr']) if row_name['Ticket_nr'] else 0
 
     if any([(row_name['min_class'] - row_name['max_class'] == 0 & row_name['ticket_range'] <= 100),
@@ -217,33 +206,10 @@ ticket_details1_enhanced.drop('passenger_count', inplace=True, axis = 1)
 
 features_all, target, features_raw = clean_and_engineer_df(titanic_df.merge(ticket_details1_enhanced, how = 'left', on = 'Ticket'))
 kaggle_data_test, _, kaggle_data_raw = clean_and_engineer_df(kaggle_data.merge(ticket_details1_enhanced, how = 'left', on = 'Ticket'))
-# plot_hist(titanic_df, 'count_cabins', 'Survived')
-# plot_hist(features_raw, 'Age', 'Clean_Title')
-# plot_hist(df, 'ticket_alpha', 'count_cabins')
-# plot_hist(df, 'ticket_alpha', 'Survived')
-# plot_hist(df, 'ticket_alpha', 'Pclass')
-# plot_hist(df, 'ticket_alpha', 'Parch')
-# plot_hist(df, 'ticket_alpha', 'SibSp')
-# plot_density(df, 'group_size', 'Survived')
-# plot_density(df, 'group_size', 'Survived')
-# plot_density(df, 'is_alone', 'Survived')
-# plot_hist(df, 'has_special_cabin', 'Survived')
-# plot_hist(df, 'count_cabins', 'Survived')
-# plot_hist(titanic_df, 'Title', 'Sex')
-# plot_hist(titanic_df, 'count_cabins', 'Survived')
-# plot_density(features_raw.join(target), features_raw.columns[18], 'Survived')
+
+
 
 trainX, testX, trainY, testY = train_test_split(features_all, target, test_size=0.3, random_state=297)
-
-# label = LabelEncoder()
-# for column in categorical_cols:
-#     try:
-#         features_all['{}_Code'.format(column)] = label.fit_transform(features[column])
-#     except TypeError:
-#         print(column)
-
-
-####FIT TREE WITH HYPERPARAMETER TUNING AND CROSS VALIDATION
 n_features = len(trainX.columns)
 clf = RandomForestClassifier(random_state=297)
 param_grid = {'max_depth': range(1, 30),
@@ -261,7 +227,7 @@ cv_model.score(trainX, trainY)
 cv_model.score(testX, testY)
 cv_model.best_params_
 
-logit = LogisticRegression(penalty='l1')
+logit = LogisticRegression(penalty='l2')
 logit.fit((trainX), trainY.values.ravel())
 logit.score((trainX), trainY)
 logit.score((testX), testY)
@@ -298,9 +264,9 @@ def bias_variance_test(testX, testY, n=500):
 bias_variance_test(testX, testY)
 
 #### MAKE SUBMISSION
-cv_model.fit(features_all, target.values.ravel())
+logit.fit(features_all, target.values.ravel())
 # cv_model.best_score_
-kaggle_predictions = cv_model.predict(kaggle_data_test)
+kaggle_predictions = logit.predict(kaggle_data_test)
 
 submission = kaggle_data[['PassengerId']]
 submission['Survived'] = kaggle_predictions
@@ -309,11 +275,11 @@ submission.to_csv(
         curr_time()), index=False)
 
 sub1 = pd.read_csv(
-    '/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/kaggle/everyone_dies/submission_2018-07-10 22:59:33.csv')
+    '/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/kaggle/everyone_dies/submission_2018-07-13 09:14:21.csv')
 sub2 = pd.read_csv(
     '/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/kaggle/everyone_dies/submission_2018-07-11 11:06:07.csv')
 sub3 = pd.read_csv(
-    '/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/kaggle/everyone_dies/submission_2018-07-11 16:14:08.csv')
+    '/Users/visheshkochher/Desktop/Python_ML_resources/datasciencedojo/kaggle/everyone_dies/submission_2018-07-13 09:17:57.csv')
 
 sub_all = sub3.join(sub1, lsuffix='_1', rsuffix='_2')
 pd.crosstab(sub_all['Survived_1'], sub_all['Survived_2'])
