@@ -28,6 +28,8 @@ rf = RandomForestClassifier(n_estimators=3)
 rf.fit(iris.data, iris.target)
 rf.predict_proba(iris.data)
 rf.score(iris.data, iris.target)
+sum(iris.target == rf.predict(iris.data))
+cross_val_score(rf, iris.data, iris.target, cv=20).mean()
 
 
 from sklearn.linear_model import LogisticRegression
@@ -51,13 +53,13 @@ lasso = Lasso(alpha=0.2, normalize=True)
 iris = datasets.load_boston()
 # Fit the regressor to the data
 lasso.fit(iris.data, iris.target)
-
+iris.feature_names
 # Compute and print the coefficients
 lasso_coef = lasso.coef_
 print(lasso_coef)
 lasso.score(iris.data, iris.target)
 # Plot the coefficients
-
+#
 # import seaborn as sns
 # sns.set()
 # _ = plt.hist(iris.data[5])
@@ -66,7 +68,7 @@ lasso.score(iris.data, iris.target)
 # _ = plt.margins(0.02)
 # plt.show()
 # plt.close()
-# plt.
+
 #
 
 
@@ -81,6 +83,7 @@ from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 iris = load_iris()
 X_train, X_test, y_train, y_test = train_test_split(iris.data, iris.target)
 
@@ -302,7 +305,7 @@ kmeans = KMeans(n_clusters=3)
 kmeans.fit(df)
 labels = kmeans.predict(df)
 centroids = kmeans.cluster_centers_
-
+kmeans.inertia_
 data = [go.Scatter(x=df.iloc[:, 0],
                    y=df.iloc[:, 2],
                    mode='markers',
@@ -311,7 +314,7 @@ data = [go.Scatter(x=df.iloc[:, 0],
                        color=iris.target,
                        symbol=labels,
                        # colorscale='Virdis',
-                       showscale=True,
+                       #showscale=True,
                        opacity=0.5
                    ),
                    ),
@@ -328,7 +331,7 @@ data = [go.Scatter(x=df.iloc[:, 0],
 plotly.offline.plot(data)
 
 ###EVALUATING A CLUSTER#####
-
+#### SELECTING NUMBER OF CLUSTERS WITH ELBOW METHOD
 cross_tab = pd.crosstab(labels, iris.target)
 
 inertia_list = []
@@ -372,7 +375,7 @@ plt.show()
 
 from scipy.cluster.hierarchy import fcluster
 
-labels = fcluster(mergings, t=3, criterion='distance')
+labels = fcluster(mergings, t=3.5, criterion='distance')
 help(fcluster)
 pd.crosstab(labels, iris.target)
 
@@ -706,6 +709,7 @@ error_for_one_probability(0,0.01)
 
 
 ######### NLP ##############
+from sklearn.datasets import load_iris
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.feature_extraction.text import CountVectorizer, HashingVectorizer
 from sklearn.preprocessing import PolynomialFeatures
@@ -714,10 +718,22 @@ from sklearn.linear_model import LogisticRegression, Lasso
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.pipeline import FeatureUnion
-from sklearn.preprocessing import Imputer
+from sklearn.preprocessing import Imputer, StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import GridSearchCV
+import pandas as pd
+import numpy as np
 
+func1 = FunctionTransformer(lambda x: x[x.columns[0]], validate=False)
+func2 = FunctionTransformer(lambda x: x[x.columns[2]], validate=False)
+
+union = FeatureUnion([('func1', make_pipeline(func1,Imputer())),
+                      ('func2', make_pipeline(func2,Imputer()))])
+func1.fit_transform(df_text)
+func2.fit_transform(df_text)
+pd.DataFrame(union.fit_transform(df_text))
+
+iris = load_iris()
 text = 'hi, my name is vishesh'
 df_text = pd.DataFrame(iris.data, columns=iris.feature_names)
 df_text['label'] = iris.target
@@ -761,7 +777,8 @@ numeric_pipeline = Pipeline([('num_only', get_num_data),
                              ])
 
 text_pipeline = Pipeline([('text_only', get_text_data),
-                             ('cvec', CountVectorizer())])
+                            ('cvec', CountVectorizer())
+                          ])
 
 just_numeric_data = numeric_pipeline.fit_transform(trainX)
 just_text_data = text_pipeline.fit_transform(trainX)
